@@ -1,23 +1,22 @@
 const express = require("express");
 const app = express();
 const port = process.env.PORT || 3002;
-const jwt = require('jsonwebtoken');
-const Ajv = require('ajv');
-const ajvFormats = require('ajv-formats');
-const crypto = require('crypto');
-const passport = require('passport');
-const passportJWT = require('passport-jwt');
+const jwt = require('jsonwebtoken')
+const Ajv = require('ajv')
+const ajvFormats = require('ajv-formats')
+const crypto = require('crypto')
+const passport = require('passport')
+const passportJWT = require('passport-jwt')
 
-app.use(express.json()); // Enable JSON parsing
+app.use(express.json()); // for parsing application/json
 
-// Secret key for JWT
+// ------ WRITE YOUR SOLUTION HERE BELOW ------//
 const SECRET_KEY = "my_secret-key";
-
-// In-memory storage (replace with a database in production)
+//to store the users
 const users = [];
+//to store the highest scores
 let highScores = [];
 
-// Set up AJV for schema validation
 const ajv = new Ajv();
 ajvFormats(ajv);
 
@@ -31,72 +30,71 @@ const userSchema = {
   additionalProperties: false,
 };
 
-// Hash password using crypto
+//hash password using crypto
 const hashPassword = (password) => {
   const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.pbkdf2Sync(password, salt, 1000, 64, "sha512").toString("hex");
-  return { hash, salt };
-};
+  const hash = crypto
+    .pbkdf2Sync(password, salt, 1000, 64, "sha512")
+    .toString("hex");
+  return { hash, salt }; 
+}
 
-// Verify password
+//verify password using saved hash and salt
 const verifyPassword = (password, salt, hash) => {
-  const newHash = crypto.pbkdf2Sync(password, salt, 1000, 64, "sha512").toString("hex");
-  return newHash === hash;
+  const newHash = crypto
+    .pbkdf2Sync(password, salt, 1000, 64, "sha512")
+    .toString("hex");
+return newHash === hash;    
+  
 };
 
-// Signup route
 app.post('/signup', (req, res) => {
   const validate = ajv.compile(userSchema);
 
   if (!validate(req.body)) {
-    return res.status(400).json({ error: validate.errors });
+    return res.status(400).json({ error: validate.errors});
   }
 
   const { userHandle, password } = req.body;
 
-  // Check if user already exists
-  if (users.some(user => user.userHandle === userHandle)) {
-    return res.status(400).json({ error: "User already exists" });
-  }
 
-  // Hash and save user
+  //Hash the password before storing
   const { hash, salt } = hashPassword(password);
-  users.push({ userHandle, hash, salt });
 
-  res.status(201).json({ message: "User Registered Successfully" });
+  //save the user
+  users.push({ userHandle, hash, salt });
+  res.status(201).json({ message: " User Registered Successfully" })
+
 });
 
-// Passport JWT strategy setup
+//passport JWT strategy setup
 passport.use(new passportJWT.Strategy(
   {
     secretOrKey: SECRET_KEY,
     jwtFromRequest: passportJWT.ExtractJwt.fromAuthHeaderAsBearerToken(),
   },
   (jwtPayload, done) => {
-    const user = users.find(user => user.userHandle === jwtPayload.userHandle);
+    const user = users.find((user) => user.userHandle === jwtPayload.userHandle);
     return done(null, user || false);
+
   }
-));
+)
+);
 
-
-
-// Login route
+//Login route
 app.post('/login', (req, res) => {
   const { userHandle, password } = req.body;
 
   if (typeof userHandle !== 'string' || typeof password !== 'string') {
-    return res.status(400).json({ message: "Invalid input data type" });
+    return res.status(400).json({ message: "Invalid input data type"});
   }
 
-  if (!userHandle || !password) {
-    return res.status(400).json({ message: "Missing userHandle or password" });
-  }
-
- 
   
+  if (!userHandle || !password) {
+    return res.status(400).json({ message: "Missing userHandle or password"});
+  }
 
-
-  // Check for extra fields
+  // Check for extra fields in the request body
   const allowedFields = ['userHandle', 'password'];
   const receivedFields = Object.keys(req.body);
   const extraFields = receivedFields.filter(field => !allowedFields.includes(field));
@@ -105,92 +103,103 @@ app.post('/login', (req, res) => {
     return res.status(400).json({ message: `Invalid fields: ${extraFields.join(', ')}` });
   }
 
-  const user = users.find(u => u.userHandle === userHandle);
+  const user = users.find((u) =>u.userHandle === userHandle);
+
+  //if the user does not exist
   if (!user) {
-    return res.status(401).json({ message: "Incorrect username" });
+    return res.status(401).json({ message: "Incorrect uesrname"})
   }
 
+  //check the password
   if (!verifyPassword(password, user.salt, user.hash)) {
-    return res.status(401).json({ message: "Incorrect password" });
+    return res.status(401).json({ message: "Incorrect password"});
   }
 
-  // Generate JWT
-  const token = jwt.sign({ userHandle }, SECRET_KEY, { expiresIn: "1h" });
 
-  res.status(200).json({ jsonWebToken: token });
+  //generate the JWT token 
+  const token = jwt.sign({ userHandle }, SECRET_KEY, { expiresIn: "1h"});
+
+  res.status(200).json({ jsonWebToken: token});
+
 });
 
-// Middleware to protect routes using JWT
+//middleware to protect routes using JWT
 const authenticateJWT = (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    return res.status(401).json({ message: "Missing authentication token" });
+   return res.status(401).json({ message: "Missing authentication token"});
   }
 
   const token = authHeader.split(" ")[1];
   jwt.verify(token, SECRET_KEY, (err, user) => {
     if (err) {
-      return res.status(401).json({ message: "Invalid token" });
+      return res.status(401).json({message: "Invalid token"});
     }
     req.user = user;
     next();
   });
 };
 
-// POST high scores
+//post high-scores endpoint
 app.post('/high-scores', authenticateJWT, (req, res) => {
-  const { level, userHandle, score, timestamp } = req.body;
+    const { level, userHandle, score, timestamp } = req.body;
+  
+    //validate request body fields
+    if (!userHandle || !level || !score || !timestamp) {
+    
+      return res.status(400).json({ error: "Missing required fields: level, score or timestamp" });
+    }
+   
+    //save the new high score
+    const newHighScore = {
+      level,
+      userHandle,
+      score,
+      timestamp
+    };
+    highScores.push(newHighScore);
 
-  if (!userHandle || !level || !score || !timestamp) {
-    return res.status(400).json({ error: "Missing required fields: level, userHandle, score, or timestamp" });
-  }
+    //Return a success response
+    return res.status(201).json(newHighScore);
 
-  // Save high score
-  const newHighScore = { level, userHandle, score, timestamp };
-  highScores.push(newHighScore);
-
-  res.status(201).json(newHighScore);
 });
 
-// GET high scores
+//Create a endpoint for get the high-score
 app.get('/high-scores', async (req, res) => {
-  const { level, page } = req.query;
+    const { level, page } = req.query;
 
-  if (!level) {
-    return res.status(400).json({ error: "Level query parameter is required" });
-  }
+    if (!level) {
+        return res.status(400).json({ error: 'Level query parameter is required'});
+    }
 
-  const filteredScores = highScores
-    .filter(score => score.level === level)
-    .sort((a, b) => b.score - a.score);
+    const filteredScores = highScores
+        .filter(score => score.level === level)
+        .sort((a, b) => b.score - a.score);
 
-  const pageNumber = parseInt(page, 10) || 1;
-  const limit = 20;
-  const startIndex = (pageNumber - 1) * limit;
-  const paginatedScores = filteredScores.slice(startIndex, startIndex + limit);
 
-  res.status(200).json(paginatedScores);
+    const pageNumber = parseInt(page, 10) || 1;
+    const limit = 20;
+    const startIndex = (pageNumber - 1) * limit;
+    const paginatedScores = filteredScores.slice(startIndex, startIndex + limit);
+
+   return res.status(200).json(paginatedScores);
+
 });
 
-// Start & stop server for tests
+
+
+// Your solution should be written here
+
+//------ WRITE YOUR SOLUTION ABOVE THIS LINE ------//
+
 let serverInstance = null;
 module.exports = {
   start: function () {
-    if (!serverInstance) {
-      serverInstance = app.listen(port, () => {
-        console.log(`Server running at http://localhost:${port}`);
-      });
-    }
+    serverInstance = app.listen(port, () => {
+      console.log(`Example app listening at http://localhost:${port}`);
+    });
   },
   close: function () {
-    if (serverInstance) {
-      serverInstance.close();
-      serverInstance = null;
-    }
+    serverInstance.close();
   },
 };
-
-// Start the server only if not in test mode
-if (require.main === module) {
-  module.exports.start();
-}
