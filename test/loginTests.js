@@ -3,7 +3,7 @@ const expect = require("chai").expect;
 chai.use(require("chai-http"));
 chai.use(require("chai-json-schema-ajv"));
 const server = require("../server");
-const apiAddress = "http://localhost:" + (process.env.PORT || 3000);
+const apiAddress = "http://localhost:" + (process.env.PORT || 3002);
 const loginSuccessfulSchema = require("./testSchemas/loginSuccessfulSchema.json");
 /*
 OPEN API Spoeification
